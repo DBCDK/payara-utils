@@ -151,13 +151,18 @@
                     if (level !== null)
                         level = level.toLowerCase();
                     var select = child.childNodes.item(1);
-                    option = select.childNodes.item(0);
-                    option.removeChild(option.firstChild);
                     if (level === null) {
+                        option = select.childNodes.item(0);
+                        option.removeChild(option.firstChild);
                         option.appendChild(document.createTextNode(inherited));
                         select.classList.add("inherited");
                         select.selectedIndex = 0;
+                    } else if (inherited === null) {
+                        inherited = level;
+                        select_item(select, level);
                     } else {
+                        option = select.childNodes.item(0);
+                        option.removeChild(option.firstChild);
                         option.appendChild(document.createTextNode("inherit"));
                         select.classList.remove("inherited");
                         inherited = level;
