@@ -173,8 +173,7 @@
                         if (k !== '.')
                             update_tree_sub(child.childNodes.item(2), k, inherited, nested[k]);
                     });
-                }
-                ;
+                };
                 var update_tree = function (data) {
                     var tree = document.getElementById('tree');
                     update_tree_sub(tree, "ROOT", null, data);
