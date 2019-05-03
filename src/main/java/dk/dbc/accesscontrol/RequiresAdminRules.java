@@ -47,8 +47,8 @@ public class RequiresAdminRules {
     private final List<IPRange> allowedAdminIpRanges;
 
     private RequiresAdminRules() {
-        this.allowedProxyIpRanges = listFromEnv("ADMIN_IP_X_FORWARDED_FOR", "127.0.0.1,192.168.0.0/16,172.16.0.0/12,10.0.0.0/8");
-        this.allowedAdminIpRanges = listFromEnv("ADMIN_IP", "127.0.0.1,192.168.0.0/16,172.16.0.0/12,10.0.0.0/8");
+        this.allowedProxyIpRanges = listFromEnv("ADMIN_IP_X_FORWARDED_FOR", "127.0.0.0/8,192.168.0.0/16,172.16.0.0/12,10.0.0.0/8");
+        this.allowedAdminIpRanges = listFromEnv("ADMIN_IP", "127.0.0.0/8,192.168.0.0/16,172.16.0.0/12,10.0.0.0/8");
     }
 
     RequiresAdminRules(String xForwardedFor, String allowed) {
