@@ -187,11 +187,18 @@ public class RequiresAdminRules {
      * @return 32-bit in a long
      */
     private static long ipOf(String addr) {
-        if (addr.replaceAll("[0-9.]", "").isEmpty()) {
-            String[] parts = addr.split("\\.");
-            if (parts.length != 4)
+        System.out.println("addr = " + addr);
+        if (addr.matches("(?:[1-9][0-9]?)?[0-9](\\.(?:[1-9][0-9]?)?[0-9]){3}")) {
+            System.out.println("matched");
+            int[] parts = Arrays.stream(addr.split("\\."))
+                    .mapToInt(Integer::parseUnsignedInt)
+                    .toArray();
+            if (!Arrays.stream(parts)
+                    .allMatch(n -> n >= 0 && n <= 255)) {
+                System.out.println("bad-part");
                 return IPV4_BAD;
-            return Arrays.stream(parts).mapToInt(Integer::parseUnsignedInt).reduce(0, (l, r) -> ( l << 8 ) + r) & IPV4_MAX;
+            }
+            return Arrays.stream(parts).reduce(0, (l, r) -> ( l << 8 ) + r) & IPV4_MAX;
         } else {
             return IPV4_BAD;
         }

@@ -76,4 +76,31 @@ public class RequiresAdminRulesTest {
         String peer = rules.remoteIp("12.34.56.78", "10.0.0.1, 98.76.54.32");
         assertThat(peer, is("10.0.0.1"));
     }
+
+    @Test(timeout = 2_000L)
+    public void badIp() throws Exception {
+        System.out.println("badIp");
+        RequiresAdminRules rules = new RequiresAdminRules("12.0.0.0/8, 98.0.0.0/8", null);
+        String peer = rules.remoteIp("boo.bar.foo.far", "10.0.0.1, 98.76.54.32");
+        assertThat(peer, is("boo.bar.foo.far"));
+    }
+
+    @Test(timeout = 2_000L)
+    public void ipv6() throws Exception {
+        System.out.println("ipv6");
+        RequiresAdminRules rules = new RequiresAdminRules("12.0.0.0/8, 98.0.0.0/8", null);
+        String peer = rules.remoteIp("::1", "10.0.0.1, 98.76.54.32");
+        assertThat(peer, is("::1"));
+    }
+
+    @Test(timeout = 2_000L)
+    public void badXForwardedFor() throws Exception {
+        System.out.println("badXForwardedFor");
+        RequiresAdminRules rules = new RequiresAdminRules("12.0.0.0-13.255.255.255, 98.0.0.0/8", null);
+        String peer1 = rules.remoteIp("12.34.56.78", "1.2.3.4, 1.4.10000.3");
+        assertThat(peer1, is("12.34.56.78"));
+        String peer2 = rules.remoteIp("12.34.56.78", "1.2.3.4, 1.4.abc.3");
+        assertThat(peer2, is("12.34.56.78"));
+    }
+
 }
