@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>LogLevel - @APPNAME@</title>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+        <style type="text/css">
+            ul {
+                list-style-type: none;
+            }
+            li > *:first-child {
+                margin-left: 0ex;
+            }
+            li > * {
+                margin-left: .5ex;
+            }
+            select.inherited {
+                color:darkgray;
+            }
+            li.collapsed li {
+                display: none;
+            }
+            li.collapsed ul:not(:empty)::before {
+                content: "\25bd";
+            }
+        </style>
+        <script type="text/javascript">
+            var loglevel = (function () {
+                var get = function (url, func) {
+                    var r = new XMLHttpRequest();
+                    r.onreadystatechange = function () {
+                        if (r.readyState === 4) {
+                            if (r.status === 200) {
+                                func(JSON.parse(r.responseText));
+                            }
+                        }
+                    };
+                    r.open("GET", url);
+                    r.setRequestHeader("Accept", "application/json");
+                    r.send();
+                };
+
+                var transform_tree = function (tree) {
+                    var ret = {};
+                    for (var key in tree) {
+                        var level = tree[key];
+                        var node = ret;
+                        if (key !== 'ROOT') {
+                            var parts = key.split(/\./);
+                            for (var i in parts) {
+                                var part = parts[i];
+                                if (!(part in node))
+                                    node[part] = {};
+                                node = node[part];
+                            }
+                        }
+                        node['.'] = {logger: key, level: level};
+                    }
+                    return ret;
+                };
+
+                var select_item = function (select, value) {
+                    var i = 0;
+                    for (; ; ) {
+                        var opt = select.item(i);
+                        if (opt === null)
+                            return;
+                        if (opt.value === value) {
+                            select.selectedIndex = i;
+                            return;
+                        }
+                        i++;
+                    }
+                };
+
+                var update_tree_sub = function (element, name, inherited, nested) {
+                    var current = nested['.'];
+                    var child = element.firstChild;
+                    var text = '';
+                    while (child !== null) {
+                        if (child.nodeType === Node.ELEMENT_NODE && child.nodeName === 'LI') {
+                            text = '';
+                            if (child.firstChild.hasChildNodes() && child.firstChild.firstChild.nodeType === Node.TEXT_NODE)
+                                text = child.firstChild.firstChild.nodeValue;
+                            if (text === name || text > name)
+                                break;
+                        }
+                        child = child.nextSibling;
+                    }
+                    if (text !== name) {
+                        var option;
+                        var li = document.createElement('LI');
+                        var span = document.createElement('SPAN');
+                        span.addEventListener("click", (function (li) {
+                            return function (e) {
+                                if (!li.classList.toggle("collapsed")) {
+                                    var list = li.getElementsByTagName('LI');
+                                    for (var i = 0; i < list.length; i++) {
+                                        list.item(i).classList.add("collapsed");
+                                    }
+                                    ;
+                                }
+                            };
+                        })(li));
+                        span.appendChild(document.createTextNode(name));
+                        li.appendChild(span);
+                        var select = document.createElement('SELECT');
+                        select.addEventListener("change", (function (logger) {
+                            return function (e) {
+                                get("/loglevel/?logger=" + escape(logger) + "&level=" + escape(this.value),
+                                        function (e) {
+                                            update_tree(transform_tree(e));
+                                        });
+                            };
+                        })(current['logger'])
+                                );
+                        select.setAttribute("data-logger", current['logger']);
+                        if (inherited !== null) {
+                            option = document.createElement("OPTION");
+                            option.appendChild(document.createTextNode("inherited"));
+                            option.setAttribute("value", "");
+                            option.classList.add("inherited");
+                            select.appendChild(option);
+                        }
+                        option = document.createElement("OPTION");
+                        option.appendChild(document.createTextNode("trace"));
+                        option.setAttribute("value", "trace");
+                        select.appendChild(option);
+                        option = document.createElement("OPTION");
+                        option.appendChild(document.createTextNode("debug"));
+                        option.setAttribute("value", "debug");
+                        select.appendChild(option);
+                        option = document.createElement("OPTION");
+                        option.appendChild(document.createTextNode("info"));
+                        option.setAttribute("value", "info");
+                        select.appendChild(option);
+                        option = document.createElement("OPTION");
+                        option.appendChild(document.createTextNode("warn"));
+                        option.setAttribute("value", "warn");
+                        select.appendChild(option);
+                        option = document.createElement("OPTION");
+                        option.appendChild(document.createTextNode("error"));
+                        option.setAttribute("value", "error");
+                        select.appendChild(option);
+                        li.appendChild(select);
+                        li.appendChild(document.createElement('UL'));
+                        element.insertBefore(li, child);
+                        child = li;
+                    }
+
+                    var level = current['level'];
+                    if (level !== null)
+                        level = level.toLowerCase();
+                    var select = child.childNodes.item(1);
+                    option = select.childNodes.item(0);
+                    option.removeChild(option.firstChild);
+                    if (level === null) {
+                        option.appendChild(document.createTextNode(inherited));
+                        select.classList.add("inherited");
+                        select.selectedIndex = 0;
+                    } else {
+                        option.appendChild(document.createTextNode("inherit"));
+                        select.classList.remove("inherited");
+                        inherited = level;
+                        select_item(select, level);
+                    }
+
+                    Object.getOwnPropertyNames(nested).sort().forEach(function (k) {
+                        if (k !== '.')
+                            update_tree_sub(child.childNodes.item(2), k, inherited, nested[k]);
+                    });
+                }
+                ;
+                var update_tree = function (data) {
+                    var tree = document.getElementById('tree');
+                    update_tree_sub(tree, "ROOT", null, data);
+                };
+                window.addEventListener("load", function () {
+                    get("/loglevel/",
+                            function (e) {
+                                update_tree(transform_tree(e));
+                            });
+                });
+                return {
+                    transform_tree: transform_tree,
+                    update_tree_sub: update_tree_sub,
+                    update_tree: update_tree
+                }
+                ;
+            })();
+
+        </script>
+    </head>
+    <body>
+        <h1>Logging level pr package for @APPNAME@</h1>
+        <ul id="tree"></ul>
+    </body>
+</html>
+

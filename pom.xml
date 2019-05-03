@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    
+    <repositories>
+        <repository>
+            <id>mavenrepo.dbc.dk</id>
+            <url>http://mavenrepo.dbc.dk/content/groups/public</url>
+        </repository>
+    </repositories>
+
+    <parent>
+        <groupId>dk.dbc</groupId>
+        <artifactId>microservice-pom</artifactId>
+        <version>latest-SNAPSHOT</version>
+        <relativePath/>
+    </parent>
+
+    <artifactId>payara-utils</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <properties>
+        <hk2.version>2.5.0</hk2.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-core</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.glassfish.hk2</groupId>
+            <artifactId>hk2-api</artifactId>
+            <version>${hk2.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.glassfish.hk2</groupId>
+            <artifactId>hk2-core</artifactId>
+            <version>${hk2.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>fish.payara.extras</groupId>
+            <artifactId>payara-embedded-web</artifactId>
+            <version>5.191</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <artifactId>junit</artifactId>
+            <groupId>junit</groupId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>                
+                <artifactId>exec-maven-plugin</artifactId>
+                <groupId>org.codehaus.mojo</groupId>
+                <version>1.6.0</version>
+                <executions>
+                    <execution>
+                        <id>extract-css-and-js</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <workingDirectory>${basedir}</workingDirectory>
+                            <executable>perl</executable>
+                            <environmentVariables>
+                                <SOURCE_DIR>${basedir}/src/main/resources/</SOURCE_DIR>
+                                <TARGET_DIR>${project.build.directory}/generated-resources/html</TARGET_DIR>
+                            </environmentVariables>
+                            <arguments>
+                                <!--<argument>-0777</argument>-->
+                                <argument>-e</argument>
+                                <argument>
+<![CDATA[
+use File::Path qw(make_path);
+use File::Spec::Functions;
+use IO::File;
+use HTML::TreeBuilder;
+
+for my $path (@ARGV) {
+    make_path catdir($ENV{TARGET_DIR}, $path);
+    my $t = new HTML::TreeBuilder->parse_file(catfile($ENV{SOURCE_DIR}, $path));
+    my @js = $t->look_down("_tag", "script");
+    for my $i (1..@js) {
+        my $file = new IO::File(catfile($ENV{TARGET_DIR}, $path, "$i.js"), "w");
+        $file->print(($js[$i-1]->content_list)[0]);
+        $file->close();
+    }
+    my @css = $t->look_down("_tag", "style");
+    for my $i (1..@css) {
+        my $file = new IO::File(catfile($ENV{TARGET_DIR}, $path, "$i.css"), "w");
+        $file->print(($css[$i-1]->content_list)[0]);
+        $file->close();
+    }
+}
+]]>
+                                </argument>
+                                <argument>LogLevelServiceResource-loglevel.html</argument>
+                                <argument>MetricsServiceResource-metrics.html</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>replace-compressed-css-and-js</id>
+                        <phase>prepare-package</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <workingDirectory>${basedir}</workingDirectory>
+                            <executable>perl</executable>
+                            <environmentVariables>
+                                <SOURCE_DIR>${basedir}/src/main/resources/</SOURCE_DIR>
+                                <INCLUDE_DIR>${project.build.directory}/generated-resources/html</INCLUDE_DIR>
+                                <TARGET_DIR>${project.build.directory}/classes</TARGET_DIR>
+                            </environmentVariables>
+                            <arguments>
+                                <!--<argument>-0777</argument>-->
+                                <argument>-e</argument>
+                                <argument>
+<![CDATA[
+use File::Path qw(make_path);
+use File::Spec::Functions;
+use IO::File;
+use HTML::TreeBuilder;
+
+make_path $ENV{TARGET_DIR};
+for my $path (@ARGV) {
+    my $t = new HTML::TreeBuilder->parse_file(catfile($ENV{SOURCE_DIR}, $path));
+    my @js = $t->look_down("_tag", "script");
+    for my $i (1..@js) {
+        my $file = new IO::File(catfile($ENV{INCLUDE_DIR}, $path, "$i.js"), "r");
+        $js[$i-1]->delete_content();
+        $js[$i-1]->push_content($file->getline());
+        $file->close();
+    }
+    my @css = $t->look_down("_tag", "style");
+    for my $i (1..@css) {
+    my $file = new IO::File(catfile($ENV{INCLUDE_DIR}, $path, "$i.css"), "r");
+        $css[$i-1]->delete_content();
+        $css[$i-1]->push_content($file->getline());
+        $file->close();
+    }
+    my $file = new IO::File(catfile($ENV{TARGET_DIR}, $path), "w");
+    $file->print($t->as_HTML());
+    $file->close();
+}
+]]>
+                                </argument>
+                                <argument>LogLevelServiceResource-loglevel.html</argument>
+                                <argument>MetricsServiceResource-metrics.html</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>net.alchim31.maven</groupId>
+                <artifactId>yuicompressor-maven-plugin</artifactId>
+                <version>1.5.1</version>
+                <executions>
+                    <execution>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>compress</goal>
+                        </goals>
+                        <configuration>
+                            <sourceDirectory>${project.build.directory}/generated-resources/html</sourceDirectory>
+                            <outputDirectory>${project.build.directory}/generated-resources/html</outputDirectory>
+                            <nosuffix>true</nosuffix>
+                            <force>true</force>
+                            <jswarn>false</jswarn>
+                        </configuration>
+                    </execution>
+                </executions> 
+            </plugin>
+        </plugins>
+    </build>
+</project>

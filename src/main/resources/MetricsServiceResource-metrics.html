@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Metrics - @APPNAME@</title>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+        <style type="text/css">
+            #pie {
+                display: inline-block;
+                vertical-align: top;
+            }
+            #pie > svg {
+                display: inline-block;
+                max-height: 300px;
+                max-width: 300px;
+                width: 20vw;
+                height: 20vw;
+            }
+
+            #pie > div {
+                text-align: left;
+                display: inline-block;
+                vertical-align: top;
+                text-shadow: 1px 1px 0px darkgrey; 
+            }
+            #pie select {
+                border: none;
+            }
+
+            #collapsed {
+                margin: 0em;
+                padding: 0em;
+                background-color: white;
+                display: inline-block;
+                vertical-align: top;
+            }
+            #collapsed > div {
+                margin: .5em;
+                padding: .5em;
+                background-color: lightgray;
+                color: gray;
+                position: relative;
+            }
+            #collapsed > div.hidden {
+                color: black;
+            }
+            #collapsed > div > .hover {
+                display: none;
+                position: absolute;
+                top: 2em;
+                left: 2em;
+                background-color: white;
+                margin: 2px;
+                padding: 2px;
+                border: 1px solid black;
+                z-index: 1;
+            }
+            #collapsed > div:hover > .hover {
+                display: inline-block;
+            }
+
+            #expanded > div {
+                margin: .5em;
+                background-color: lightgray;
+                padding: .5em;
+                display: inline-block;
+                float: left;
+            }
+            #expanded > div.hidden {
+                display: none;
+            }
+            #expanded > div > table {
+                background-color: white;
+            }
+            #expanded > div > table td {
+                background-color: lightgrey;
+                margin: .1em;
+                padding: .05em;
+                width: 6em;
+                overflow: hidden;
+            }
+
+
+        </style>
+        <script type="text/javascript">
+            var pie = (function (elementId) {
+                var xy = function (fraction) {
+                    var angle = (fraction - .25) * 2.0 * Math.PI;
+                    return {
+                        x: Math.cos(angle),
+                        y: Math.sin(angle)
+                    };
+                };
+
+                var describeArc = function (from, to) {
+                    var start = xy(from);
+                    var end = xy(to);
+                    var large = to - from <= .5 ? 0 : 1;
+                    return [
+                        "M", start.x, start.y,
+                        "A", 1.0, 1.0, 0, large, 1, end.x, end.y,
+                        "L", 0.0, 0.0,
+                        "L", start.x, start.y
+                    ].join(" ");
+                };
+                var elem = function (type, kv) {
+                    var e = document.createElementNS('http://www.w3.org/2000/svg', type);
+                    e.setAttributeNS(null, "stroke-width", "0");
+                    for (var k in kv) {
+                        e.setAttributeNS(null, k, kv[k]);
+                    }
+                    return e;
+                };
+                var svg;
+                var legend;
+
+                var colors = [
+                    "#800", "#080", "#008", "#880", "#088", "#808",
+                    "#f00", "#0f0", "#00f", "#ff0", "#0ff", "#f0f",
+                    "#f88", "#8f8", "#88f", "#ff8", "#8ff", "#f8f"
+                ];
+                var order = [];
+                var specs = {};
+                var func;
+                var render = function () {
+                    var total = 0.0;
+                    var show = [];
+                    order.forEach(function (k) {
+                        specs[k].use = false;
+                        if (specs[k].value !== undefined) {
+                            var num = specs[k].actual = func(specs[k].value);
+                            if (typeof (num) === 'number' && !Number.isNaN(num)) {
+                                specs[k].use = true;
+                                total += specs[k].actual;
+                                show.push(specs[k]);
+                            }
+                        }
+                        specs[k].legend.style.display = specs[k].use ? "" : "none";
+                    });
+                    while (svg.hasChildNodes())
+                        svg.removeChild(svg.firstChild);
+                    if (show.length > 0) {
+                        var start;
+                        show.forEach(function (spec, i) {
+                            if (i === 0) {
+                                svg.appendChild(elem('circle', {fill: spec.color, x: 0, y: 0, r: 1}));
+                                start = spec.actual / total;
+                            } else {
+                                var end = start + spec.actual / total;
+                                svg.appendChild(elem('path', {fill: spec.color, d: describeArc(start, end)}));
+                                start = end;
+                            }
+                        });
+                    } else {
+                        svg.appendChild(elem('circle', {fill: "grey", x: 0, y: 0, r: 1}));
+                    }
+                };
+
+                window.addEventListener('load', function () {
+                    var pie = document.getElementById(elementId);
+                    svg = elem("svg", {preserveAspectRatio: "xMidYMid slice", viewBox: "-1 -1 2 2"});
+                    pie.appendChild(svg);
+                    var legend_div = document.createElement('div');
+                    pie.appendChild(legend_div);
+
+                    legend = function (title, color) {
+                        var div = document.createElement("div");
+                        div.style.color = color;
+                        div.appendChild(document.createTextNode(title));
+                        legend_div.appendChild(div);
+                        return div;
+                    };
+                    var span = document.createElement('div');
+                    legend_div.appendChild(span);
+                    span.appendChild(document.createTextNode("legend:"));
+                    var select = document.createElement('select');
+                    span.appendChild(select);
+                    [
+                        {t: "count", f: function (e) {
+                                return e['count'];
+                            }},
+                        {t: "50% x count", f: function (e) {
+                                return e['p50'] * e['count'];
+                            }},
+                        {t: "50%", f: function (e) {
+                                return e['p50'];
+                            }},
+                        {t: "75% x count", f: function (e) {
+                                return e['p75'] * e['count'];
+                            }},
+                        {t: "75%", f: function (e) {
+                                return e['p75'];
+                            }},
+                        {t: "95% x count", f: function (e) {
+                                return e['p95'] * e['count'];
+                            }},
+                        {t: "95%", f: function (e) {
+                                return e['p95'];
+                            }},
+                        {t: "98% x count", f: function (e) {
+                                return e['p98'] * e['count'];
+                            }},
+                        {t: "98%", f: function (e) {
+                                return e['p98'];
+                            }},
+                        {t: "99% x count", f: function (e) {
+                                return e['p99'] * e['count'];
+                            }},
+                        {t: "99%", f: function (e) {
+                                return e['p99'];
+                            }},
+                        {t: "99.9% x count", f: function (e) {
+                                return e['p999'] * e['count'];
+                            }},
+                        {t: "99.9%", f: function (e) {
+                                return e['p999'];
+                            }},
+                        {t: "/1m", f: function (e) {
+                                return e['oneMinRate'];
+                            }},
+                        {t: "/5m", f: function (e) {
+                                return e['fiveMinRate'];
+                            }},
+                        {t: "/15m", f: function (e) {
+                                return e['fifteenMinRate'];
+                            }}
+                    ].forEach(function (d) {
+                        var option = document.createElement('option');
+                        select.appendChild(option);
+                        option.value = d.f;
+                        option.appendChild(document.createTextNode(d.t));
+                    });
+                    var onchange = function () {
+                        func = eval("(" + select.options[select.selectedIndex].value + ")");
+                        render();
+                    };
+                    select.addEventListener("change", onchange);
+                    onchange();
+                });
+                return function (name) {
+                    if (!(name in specs)) {
+                        var color = colors[order.length % colors.length];
+                        specs[name] = {
+                            color: color,
+                            legend: legend(name.replace(/^name=/, ""), color)
+                        };
+                        order.push(name);
+                    }
+                    return (function (spec) {
+                        return function (value) {
+                            spec.value = value;
+                            render();
+                        };
+                    })(specs[name]);
+                };
+            })("pie");
+
+            (function () {
+                var state = {};
+
+                var get = function (url, func) {
+                    var r = new XMLHttpRequest();
+                    r.onreadystatechange = function () {
+                        if (r.readyState === 4) {
+                            if (r.status === 200) {
+                                func(JSON.parse(r.responseText));
+                            }
+                        }
+                    };
+                    r.open("GET", url);
+                    r.setRequestHeader("Accept", "application/json");
+                    r.send();
+                };
+
+                var shortName = function (name) {
+                    var parts = name.split(/\./);
+                    for (var i = 0; i < parts.length; i++) {
+                        if (parts[i].match(/^[a-z]*$/) === null) {
+                            parts[i] = parts[i].replace(/Bean$/, "");
+                            break;
+                        }
+                        parts[i] = parts[i][0];
+                    }
+                    return parts.join(".");
+                };
+
+                var traverseAndUpdate = function (element, data) {
+                    for (var child = element.firstChild; child !== null; child = child.nextSibling)
+                        if (child.nodeType === Node.ELEMENT_NODE)
+                            traverseAndUpdate(child, data);
+                    var from = element.getAttribute("data-from");
+                    if (from !== null && from in data) {
+                        while (element.firstChild !== null)
+                            element.removeChild(element.firstChild);
+                        var text = data[from];
+                        if (typeof (text) !== "string") {
+                            text = "" + (Math.round(text * 1000) / 1000);
+                            var pos = text.indexOf(".");
+                            if (pos > 0)
+                                text = (text + "000").substr(0, pos + 4);
+                        }
+                        element.appendChild(document.createTextNode(text));
+                    }
+                };
+
+                var milliFields = ['max', 'mean', 'min', 'p50', 'p75', 'p95', 'p98', 'p99', 'p999'];
+                var milliData = function (data) {
+                    milliFields.forEach(function (f) {
+                        if (f in data)
+                            data[f] = data[f] / 1000000; // ns -> ms
+                    });
+                };
+
+                var registerMetric = function (key, data) {
+                    milliData(data);
+                    var name = shortName(key);
+                    data['title'] = name;
+                    data['full-title'] = key;
+
+                    if (!(key in state)) {
+                        var before = Object.keys(state).sort().filter(function (k) {
+                            return k > key;
+                        })[0];
+
+                        var collapsed_parent = document.getElementById("collapsed");
+                        var collapsed = document.getElementById("template_collapsed").cloneNode(true);
+                        collapsed.removeAttribute("id");
+                        collapsed_parent.insertBefore(collapsed, before === undefined ? null : state[before]["collapsed"]);
+                        traverseAndUpdate(collapsed, data);
+
+                        var expanded_parent = document.getElementById("expanded");
+                        var expanded = document.getElementById("template_expanded").cloneNode(true);
+                        expanded.removeAttribute("id");
+                        expanded.classList.add('hidden');
+                        expanded_parent.insertBefore(expanded, before === undefined ? null : state[before]["expanded"]);
+
+                        state[key] = {
+                            name: name,
+                            collapsed: collapsed,
+                            expanded: expanded,
+                            pie: false
+                        };
+
+                        collapsed.querySelector('*[data-from = "title"]').addEventListener("click", (function (key, state) {
+                            return function (e) {
+                                if (state['collapsed'].classList.contains("hidden")) {
+                                    state['pie'] = false;
+                                    state['expanded'].classList.add('hidden');
+                                    state['collapsed'].classList.remove('hidden');
+                                    pie(key)();
+                                } else {
+                                    state['pie'] = true;
+                                    state['expanded'].classList.remove('hidden');
+                                    state['collapsed'].classList.add('hidden');
+                                    pie(key)(state['data']);
+                                }
+                            };
+                        })(key, state[key]));
+                    }
+                    state[key]['data'] = data;
+                    traverseAndUpdate(state[key]['expanded'], data);
+                    if (state[key]['pie'])
+                        pie(key)(data);
+                };
+
+                var updateMetrics = function () {
+                    get("/metrics/application", function (json) {
+                        for (var key in json)
+                            registerMetric(key, json[key]);
+                    });
+                };
+
+                window.addEventListener("load", function () {
+                    updateMetrics();
+                    window.setInterval(updateMetrics, 5000);
+                });
+                return undefined;
+            })();
+        </script>
+    </head>
+    <body>
+        <h1>Call metrics for @APPNAME@</h1>
+        <div id="collapsed"></div>
+        <div id="pie"></div>
+        <div id="expanded"></div>
+        <div style="display: none;">
+            <div id="template_collapsed">
+                <span data-from="title"></span>
+                <span class="hover" data-from="full-title"></span>
+            </div>
+            <div id="template_expanded" class="hidden">
+                <span data-from="title"></span>
+                <table>
+                    <tbody>
+                        <tr><td>Count</td><td data-from="count"></td></tr>
+                        <tr><td>Min</td><td data-from="min"></td></tr>
+                        <tr><td>Mean</td><td data-from="mean"></td></tr>
+                        <tr><td>Max</td><td data-from="max"></td></tr>
+                        <tr><td>50%</td><td data-from="p50"></td></tr>
+                        <tr><td>75%</td><td data-from="p75"></td></tr>
+                        <tr><td>95%</td><td data-from="p95"></td></tr>
+                        <tr><td>98%</td><td data-from="p98"></td></tr>
+                        <tr><td>99%</td><td data-from="p99"></td></tr>
+                        <tr><td>99.9%</td><td data-from="p999"></td></tr>
+                        <tr><td>Rate</td><td data-from="meanRate"></td></tr>
+                        <tr><td>Rate/1m</td><td data-from="oneMinRate"></td></tr>
+                        <tr><td>Rate/5m</td><td data-from="fiveMinRate"></td></tr>
+                        <tr><td>Rate/15m</td><td data-from="fifteenMinRate"></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </body>
+</html>
+
