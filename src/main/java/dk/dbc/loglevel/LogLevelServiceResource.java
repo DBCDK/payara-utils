@@ -23,15 +23,10 @@ import ch.qos.logback.classic.LoggerContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import dk.dbc.accesscontrol.RequiresAdminRules;
-import dk.dbc.metrics.MetricsServiceResource;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.AccessDeniedException;
 import java.util.Locale;
 import java.util.logging.Logger;
-import javax.naming.InitialContext;
-import javax.naming.NamingException;
 import javax.servlet.ServletException;
 import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServlet;
@@ -39,7 +34,8 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import org.slf4j.LoggerFactory;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
+import static dk.dbc.resources.PayaraUtilsHtmlResource.loadHtml;
+
 
 /**
  * Servlet that allows for changing loglevel on the fly8
@@ -90,7 +86,7 @@ public class LogLevelServiceResource extends HttpServlet {
      * @throws ServletException If the html cannot be loaded
      */
     private void doGetHtml(HttpServletResponse resp) throws IOException, ServletException {
-        byte[] html = loadHtml();
+        byte[] html = loadHtml(getClass().getSimpleName() + "-loglevel.html");
         if (html == null)
             throw new ServletException("Could not get html resource");
         resp.setStatus(200);
@@ -149,34 +145,4 @@ public class LogLevelServiceResource extends HttpServlet {
         return l.toString();
     }
 
-    private byte[] loadHtml() {
-        try (InputStream is = getClass().getClassLoader()
-                .getResourceAsStream(getClass().getSimpleName() + "-loglevel.html")) {
-            return getStringFromInputStream(is)
-                    .replaceAll("@APPNAME@", applicationName()).
-                    getBytes(UTF_8);
-        } catch (IOException ex) {
-            Logger.getLogger(MetricsServiceResource.class.getName())
-                    .log(java.util.logging.Level.SEVERE, null, ex);
-            return null;
-        }
-    }
-
-    private String applicationName() {
-        try {
-            return ( (String) InitialContext.doLookup("java:app/AppName") )
-                    .replaceFirst("-\\d+.\\d+-SNAPSHOT", "");
-        } catch (NamingException ex) {
-            return "Unknown";
-        }
-    }
-
-    private String getStringFromInputStream(InputStream is) throws IOException {
-        ByteArrayOutputStream os = new ByteArrayOutputStream();
-        byte[] buffer = new byte[4096];
-        for (int len = is.read(buffer) ; len != -1 ; len = is.read(buffer)) {
-            os.write(buffer, 0, len);
-        }
-        return new String(os.toByteArray(), UTF_8);
-    }
 }
