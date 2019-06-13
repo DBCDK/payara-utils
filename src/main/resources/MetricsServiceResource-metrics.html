@@ -1,394 +1,667 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
     <head>
         <title>Metrics - @APPNAME@</title>
         <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-        <style type="text/css">
-            #pie {
-                display: inline-block;
-                vertical-align: top;
+        <style>
+            html, body, iframe {
+                width: 100vw;
+                height: 100vh;
+                padding: 0px;
+                border: 0px;
+                margin: 0px;
             }
-            #pie > svg {
-                display: inline-block;
-                max-height: 300px;
-                max-width: 300px;
-                width: 20vw;
-                height: 20vw;
+            .root {
+                display: block;
+                clear: both;
             }
-
-            #pie > div {
-                text-align: left;
-                display: inline-block;
-                vertical-align: top;
-                text-shadow: 1px 1px 0px darkgrey; 
-            }
-            #pie select {
-                border: none;
-            }
-
-            #collapsed {
-                margin: 0em;
-                padding: 0em;
-                background-color: white;
-                display: inline-block;
-                vertical-align: top;
-            }
-            #collapsed > div {
-                margin: .5em;
-                padding: .5em;
-                background-color: lightgray;
-                color: gray;
-                position: relative;
-            }
-            #collapsed > div.hidden {
-                color: black;
-            }
-            #collapsed > div > .hover {
-                display: none;
-                position: absolute;
-                top: 2em;
-                left: 2em;
-                background-color: white;
-                margin: 2px;
-                padding: 2px;
-                border: 1px solid black;
-                z-index: 1;
-            }
-            #collapsed > div:hover > .hover {
+            .c {
+                text-align: center;
                 display: inline-block;
             }
-
-            #expanded > div {
+            .root > div {
+                padding: 1em;
+                display: inline-block;
+                float: left;
+            }
+            #metrics > div {
                 margin: .5em;
                 background-color: lightgray;
                 padding: .5em;
                 display: inline-block;
                 float: left;
             }
-            #expanded > div.hidden {
+            #metrics > div.hidden {
                 display: none;
             }
-            #expanded > div > table {
+            #metrics > div > table {
                 background-color: white;
             }
-            #expanded > div > table td {
+            #metrics > div > table td {
                 background-color: lightgrey;
                 margin: .1em;
                 padding: .05em;
                 width: 6em;
                 overflow: hidden;
             }
-
+            div > .hover {
+                display: none;
+                position: absolute;
+                top: -.8em;
+                left: 5em;
+                background-color: white;
+                margin: 2px;
+                padding: 2px;
+                border: 1px solid black;
+                z-index: 1;
+            }
+            div:hover > .hover {
+                display: inline-block;
+            }
+            select {
+                width: 200px;
+            }
+            svg {
+                padding-top: 2em;
+                text-align: center;
+            }
 
         </style>
-        <script type="text/javascript">
-            var pie = (function (elementId) {
-                var xy = function (fraction) {
-                    var angle = (fraction - .25) * 2.0 * Math.PI;
-                    return {
-                        x: Math.cos(angle),
-                        y: Math.sin(angle)
-                    };
-                };
-
-                var describeArc = function (from, to) {
-                    var start = xy(from);
-                    var end = xy(to);
-                    var large = to - from <= .5 ? 0 : 1;
-                    return [
-                        "M", start.x, start.y,
-                        "A", 1.0, 1.0, 0, large, 1, end.x, end.y,
-                        "L", 0.0, 0.0,
-                        "L", start.x, start.y
-                    ].join(" ");
-                };
-                var elem = function (type, kv) {
-                    var e = document.createElementNS('http://www.w3.org/2000/svg', type);
-                    e.setAttributeNS(null, "stroke-width", "0");
-                    for (var k in kv) {
-                        e.setAttributeNS(null, k, kv[k]);
-                    }
-                    return e;
-                };
-                var svg;
-                var legend;
-
+        <script>
+            var Metrics = (function () {
                 var colors = [
                     "#800", "#080", "#008", "#880", "#088", "#808",
                     "#f00", "#0f0", "#00f", "#ff0", "#0ff", "#f0f",
                     "#f88", "#8f8", "#88f", "#ff8", "#8ff", "#f8f"
                 ];
-                var order = [];
-                var specs = {};
-                var func;
-                var render = function () {
-                    var total = 0.0;
-                    var show = [];
-                    order.forEach(function (k) {
-                        specs[k].use = false;
-                        if (specs[k].value !== undefined) {
-                            var num = specs[k].actual = func(specs[k].value);
-                            if (typeof (num) === 'number' && !Number.isNaN(num)) {
-                                specs[k].use = true;
-                                total += specs[k].actual;
-                                show.push(specs[k]);
-                            }
+                var graph_metrics = ['p50', 'p75', 'p95', 'p98', 'p99', 'p999'];
+                var milliFields = ['max', 'mean', 'min', 'p50', 'p75', 'p95', 'p98', 'p99', 'p999'];
+
+                // Class build helper
+                var extend_object = function (constructor, properties) {
+                    for (var k in properties) {
+                        var v = properties[k];
+                        if (!('enumerable' in v))
+                            v.enumerable = true;
+                    }
+                    properties.constructor = {
+                        value: constructor
+                    };
+                    constructor.prototype = Object.create(Object.prototype, properties);
+                    return constructor;
+                };
+
+                // Enable/disable rendering of graph for html-callback
+                var toggle = function (m, id) {
+                    return function () {
+                        var e = document.getElementById('metrics#' + id);
+                        if (e.classList.contains('hidden')) {
+                            e.classList.remove('hidden');
+                            m.show(id);
+                        } else {
+                            e.classList.add('hidden');
+                            m.hide(id);
                         }
-                        specs[k].legend.style.display = specs[k].use ? "" : "none";
-                    });
-                    while (svg.hasChildNodes())
-                        svg.removeChild(svg.firstChild);
-                    if (show.length > 0) {
-                        var start;
-                        show.forEach(function (spec, i) {
-                            if (i === 0) {
-                                svg.appendChild(elem('circle', {fill: spec.color, x: 0, y: 0, r: 1}));
-                                start = spec.actual / total;
-                            } else {
-                                var end = start + spec.actual / total;
-                                svg.appendChild(elem('path', {fill: spec.color, d: describeArc(start, end)}));
-                                start = end;
-                            }
-                        });
-                    } else {
-                        svg.appendChild(elem('circle', {fill: "grey", x: 0, y: 0, r: 1}));
-                    }
+                    };
+                };
+                // Set thish graph to highlight (undefined is none)
+                var highlight = function (m, id) {
+                    return function () {
+                        m.highlight(id);
+                    };
                 };
 
-                window.addEventListener('load', function () {
-                    var pie = document.getElementById(elementId);
-                    svg = elem("svg", {preserveAspectRatio: "xMidYMid slice", viewBox: "-1 -1 2 2"});
-                    pie.appendChild(svg);
-                    var legend_div = document.createElement('div');
-                    pie.appendChild(legend_div);
-
-                    legend = function (title, color) {
-                        var div = document.createElement("div");
-                        div.style.color = color;
-                        div.appendChild(document.createTextNode(title));
-                        legend_div.appendChild(div);
-                        return div;
-                    };
-                    var span = document.createElement('div');
-                    legend_div.appendChild(span);
-                    span.appendChild(document.createTextNode("legend:"));
-                    var select = document.createElement('select');
-                    span.appendChild(select);
-                    [
-                        {t: "count", f: function (e) {
-                                return e['count'];
-                            }},
-                        {t: "50% x count", f: function (e) {
-                                return e['p50'] * e['count'];
-                            }},
-                        {t: "50%", f: function (e) {
-                                return e['p50'];
-                            }},
-                        {t: "75% x count", f: function (e) {
-                                return e['p75'] * e['count'];
-                            }},
-                        {t: "75%", f: function (e) {
-                                return e['p75'];
-                            }},
-                        {t: "95% x count", f: function (e) {
-                                return e['p95'] * e['count'];
-                            }},
-                        {t: "95%", f: function (e) {
-                                return e['p95'];
-                            }},
-                        {t: "98% x count", f: function (e) {
-                                return e['p98'] * e['count'];
-                            }},
-                        {t: "98%", f: function (e) {
-                                return e['p98'];
-                            }},
-                        {t: "99% x count", f: function (e) {
-                                return e['p99'] * e['count'];
-                            }},
-                        {t: "99%", f: function (e) {
-                                return e['p99'];
-                            }},
-                        {t: "99.9% x count", f: function (e) {
-                                return e['p999'] * e['count'];
-                            }},
-                        {t: "99.9%", f: function (e) {
-                                return e['p999'];
-                            }},
-                        {t: "/1m", f: function (e) {
-                                return e['oneMinRate'];
-                            }},
-                        {t: "/5m", f: function (e) {
-                                return e['fiveMinRate'];
-                            }},
-                        {t: "/15m", f: function (e) {
-                                return e['fifteenMinRate'];
-                            }}
-                    ].forEach(function (d) {
-                        var option = document.createElement('option');
-                        select.appendChild(option);
-                        option.value = d.f;
-                        option.appendChild(document.createTextNode(d.t));
-                    });
-                    var onchange = function () {
-                        func = eval("(" + select.options[select.selectedIndex].value + ")");
-                        render();
-                    };
-                    select.addEventListener("change", onchange);
-                    onchange();
-                });
-                return function (name) {
-                    if (!(name in specs)) {
-                        var color = colors[order.length % colors.length];
-                        specs[name] = {
-                            color: color,
-                            legend: legend(name.replace(/^name=/, ""), color)
-                        };
-                        order.push(name);
-                    }
-                    return (function (spec) {
-                        return function (value) {
-                            spec.value = value;
-                            render();
-                        };
-                    })(specs[name]);
-                };
-            })("pie");
-
-            (function () {
-                var state = {};
-
-                var get = function (url, func) {
+                // Ajax-get requesting json. Calls function with json-object
+                var ajax = function (url, func) {
                     var r = new XMLHttpRequest();
                     r.onreadystatechange = function () {
-                        if (r.readyState === 4) {
-                            if (r.status === 200) {
-                                func(JSON.parse(r.responseText));
-                            }
-                        }
+                        if (r.readyState === 4 && r.status === 200)
+                            func(JSON.parse(r.responseText));
                     };
                     r.open("GET", url);
                     r.setRequestHeader("Accept", "application/json");
                     r.send();
                 };
 
+                // Create a short name for a
                 var shortName = function (name) {
                     var parts = name.split(/\./);
                     for (var i = 0; i < parts.length; i++) {
-                        if (parts[i].match(/^[a-z]*$/) === null) {
+                        if (parts[i].match(/^[a-z][a-z0-9]*$/) === null) {
                             parts[i] = parts[i].replace(/Bean$/, "");
                             break;
+                        } else {
+                            parts[i] = parts[i][0];
                         }
-                        parts[i] = parts[i][0];
                     }
                     return parts.join(".");
                 };
 
-                var traverseAndUpdate = function (element, data) {
-                    for (var child = element.firstChild; child !== null; child = child.nextSibling)
-                        if (child.nodeType === Node.ELEMENT_NODE)
-                            traverseAndUpdate(child, data);
-                    var from = element.getAttribute("data-from");
-                    if (from !== null && from in data) {
-                        while (element.firstChild !== null)
-                            element.removeChild(element.firstChild);
-                        var text = data[from];
-                        if (typeof (text) !== "string") {
-                            text = "" + (Math.round(text * 1000) / 1000);
-                            var pos = text.indexOf(".");
-                            if (pos > 0)
-                                text = (text + "000").substr(0, pos + 4);
+                // Copy a template into the tree (alphabeticaly places), renaming id
+                var copy_template = function (group, name) {
+                    var id = group + "#" + name;
+                    var container = document.getElementById(group);
+                    var before = container.firstChild;
+                    while (before !== null && before.getAttribute('id') < id)
+                        before = before.nextSibling;
+                    if (before !== null && before.getAttribute('id') === id)
+                        return before;
+                    var copy = document.getElementById(group + "_template").cloneNode(true);
+                    copy.setAttribute('id', id);
+                    container.insertBefore(copy, before);
+                    return copy;
+                };
+
+                // Copy metrics into DOM node (and subnodes) as #text to any node with 'data-from'
+                var copy_data_from_metrics = function (element, metric) {
+                    for (var c = element.firstChild; c !== null; c = c.nextSibling) {
+                        if (c.nodeType === Node.ELEMENT_NODE) {
+                            var from = c.getAttribute('data-from');
+                            if (from === null) {
+                                copy_data_from_metrics(c, metric);
+                            } else {
+                                while (c.hasChildNodes())
+                                    c.removeChild(c.firstChild);
+                                var text = metric[from];
+                                if (typeof (text) !== "string") {
+                                    text = "" + (Math.round(text * 1000) / 1000);
+                                    var pos = text.indexOf(".");
+                                    if (pos > 0)
+                                        text = (text + "000").substr(0, pos + 4);
+                                }
+                                c.appendChild(document.createTextNode(text));
+                            }
                         }
-                        element.appendChild(document.createTextNode(text));
                     }
                 };
 
-                var milliFields = ['max', 'mean', 'min', 'p50', 'p75', 'p95', 'p98', 'p99', 'p999'];
-                var milliData = function (data) {
+                // Fix nano seconds in metrics response
+                var updateMetricsToMillisecondData = function (data) {
                     milliFields.forEach(function (f) {
                         if (f in data)
                             data[f] = data[f] / 1000000; // ns -> ms
                     });
                 };
 
-                var registerMetric = function (key, data) {
-                    milliData(data);
-                    var name = shortName(key);
-                    data['title'] = name;
-                    data['full-title'] = key;
+                // generic mean function
+                var mean = function (array) {
+                    array.sort();
+                    var idx = Math.floor(array.length / 2);
+                    var mean = array[idx];
+                    if (array.length % 2 === 0)
+                        mean = (mean + array[idx - 1]) / 2;
+                    return {
+                        min: array[0],
+                        mean: mean,
+                        max: array[array.length - 1]
+                    };
+                };
 
-                    if (!(key in state)) {
-                        var before = Object.keys(state).sort().filter(function (k) {
-                            return k > key;
-                        })[0];
 
-                        var collapsed_parent = document.getElementById("collapsed");
-                        var collapsed = document.getElementById("template_collapsed").cloneNode(true);
-                        collapsed.removeAttribute("id");
-                        collapsed_parent.insertBefore(collapsed, before === undefined ? null : state[before]["collapsed"]);
-                        traverseAndUpdate(collapsed, data);
-
-                        var expanded_parent = document.getElementById("expanded");
-                        var expanded = document.getElementById("template_expanded").cloneNode(true);
-                        expanded.removeAttribute("id");
-                        expanded.classList.add('hidden');
-                        expanded_parent.insertBefore(expanded, before === undefined ? null : state[before]["expanded"]);
-
-                        state[key] = {
-                            name: name,
-                            collapsed: collapsed,
-                            expanded: expanded,
-                            pie: false
-                        };
-
-                        collapsed.querySelector('*[data-from = "title"]').addEventListener("click", (function (key, state) {
-                            return function (e) {
-                                if (state['collapsed'].classList.contains("hidden")) {
-                                    state['pie'] = false;
-                                    state['expanded'].classList.add('hidden');
-                                    state['collapsed'].classList.remove('hidden');
-                                    pie(key)();
-                                } else {
-                                    state['pie'] = true;
-                                    state['expanded'].classList.remove('hidden');
-                                    state['collapsed'].classList.add('hidden');
-                                    pie(key)(state['data']);
+                // Class for calculating a pie chart
+                var Pie = extend_object(
+                        function (total) { // Max value
+                            this._total = total;
+                            this.accumulated = 0;
+                        },
+                        {
+                            arc: {
+                                value: function (amount) { // Part of the max value
+                                    var from = this.accumulated / this._total;
+                                    this.accumulated += amount;
+                                    var to = this.accumulated / this._total;
+                                    var start = this.xy(from);
+                                    var end = this.xy(to);
+                                    var large = to - from <= .5 ? 0 : 1;
+                                    return [
+                                        "M", start.x, start.y,
+                                        "A", 1.0, 1.0, 0, large, 1, end.x, end.y,
+                                        "L", 0.0, 0.0,
+                                        "L", start.x, start.y
+                                    ].join(" ");
                                 }
+                            },
+
+                            xy: {
+                                value: function (fraction) { // Get xy pos of a fraction of the pie (>=0 <1)
+                                    var rad = 2.0 * Math.PI * (fraction - .25);
+                                    return {
+                                        x: Math.cos(rad),
+                                        y: Math.sin(rad)
+                                    };
+                                }
+                            }
+                        }
+                );
+
+
+                // Colleactor for a graph, calls mean whenever it has enough data to generate a datapoint
+                var GraphData = extend_object(
+                        function (length, every) { // Number of datapoints, how many readings for a datapoind
+                            this.length = length;
+                            this.every = every;
+                            this.history = [];
+                            this.buffer = [];
+                        },
+                        {
+                            add_metric: {
+                                value: function (obj) { // Metric object
+                                    this.buffer.push(obj);
+                                    if (this.buffer.length >= this.every) {
+                                        var buffer = this.buffer;
+                                        this.buffer = [];
+                                        var objs = {};
+                                        var keys = [];
+
+                                        buffer.forEach(function (d) {
+                                            keys = keys.concat(Object.keys(d));
+                                        });
+                                        keys = new Set(keys);
+                                        keys.forEach(function (k) {
+                                            objs[k] = {};
+                                            graph_metrics.forEach(function (g) {
+                                                objs[k][g] = [];
+                                            });
+                                            buffer.forEach(function (d) {
+                                                if (k in d) {
+                                                    graph_metrics.forEach(function (g) {
+                                                        objs[k][g].push(d[k][g]);
+                                                    });
+                                                }
+                                            });
+                                        });
+                                        var data = {};
+                                        keys.forEach(function (k) {
+                                            data[k] = {};
+                                            graph_metrics.forEach(function (g) {
+                                                data[k][g] = mean(objs[k][g]);
+                                            });
+                                        });
+                                        this.history.push(data);
+                                        if (this.history.length > this.length)
+                                            this.history = this.history.slice(1);
+                                    }
+                                }
+                            },
+                            data: {
+                                get: function () { // Get dataset for this._graph
+                                    var obj = {};
+                                    this.history.forEach(function (e) {
+                                        Object.keys(e).forEach(function (k) {
+                                            obj[k] = [];
+                                        });
+                                    });
+                                    var keys = Object.keys(obj);
+                                    this.history.forEach(function (e) {
+                                        keys.forEach(function (k) {
+                                            if (k in e) {
+                                                obj[k].push(e[k]);
+                                            } else {
+                                                obj[k].push(null);
+                                            }
+                                        });
+                                    });
+                                    return obj;
+                                }
+                            }
+                        });
+
+                // Dataset collecots (adds data to GrapghData objects)
+                var GraphDataCollection = extend_object(
+                        function () {
+                            this._graphs = [];
+                        },
+                        {
+                            make: {
+                                value: function (length, every) { // Construct a DataGraph
+                                    var graphData = new GraphData(length, every);
+                                    this._graphs.push(graphData);
+                                    return graphData;
+                                }
+                            },
+                            add_metrics: {
+                                value: function (metrics) { // Convert a metrics object ad add to all graphs
+                                    var obj = {};
+                                    for (var key in metrics) {
+                                        var val = metrics[key];
+                                        obj[key] = {};
+                                        graph_metrics.forEach(function (p) {
+                                            obj[key][p] = val[p];
+                                        });
+                                    }
+                                    this._graphs.forEach(function (d) {
+                                        d.add_metric(obj);
+                                    });
+                                }
+                            }
+                        });
+
+
+                var Metrics = extend_object(
+                        function () {
+                            this._color_i = 0;
+                            this._colors = {};
+                            this._metric_mapper = function (e) {
+                                return e['p50'];
                             };
-                        })(key, state[key]));
-                    }
-                    state[key]['data'] = data;
-                    traverseAndUpdate(state[key]['expanded'], data);
-                    if (state[key]['pie'])
-                        pie(key)(data);
-                };
+                            this._graph_data_collection = new GraphDataCollection();
+                            this._graph_data = {
+                                "5min": this._graph_data_collection.make(61, 1),
+                                "1hour": this._graph_data_collection.make(61, 12),
+                                "4hour": this._graph_data_collection.make(61, 48)
+                            };
+                            this._graph_rate = "5min";
+                            this._graph_selector = "p50";
+                        },
+                        {
+                            on_load: {
+                                get: function () {
+                                    return function () {
+                                        this._pie = document.getElementById("pie");
+                                        this._graph = document.getElementById("graph");
+                                        var run = function () {
+                                            ajax("metrics/application", this.set_metrics.bind(this));
+                                        }.bind(this);
+                                        run();
+                                        setInterval(run, 5000);
+                                        var selects = document.querySelectorAll("select");
+                                        for (var i = 0; i < selects.length; i++) {
+                                            var sel = selects.item(i);
+                                            sel.onchange.bind(sel)();
+                                        }
+                                    }.bind(this);
+                                }
+                            },
+                            svg_element: {
+                                value: function (type, attrs) { // Construct a DOM SVG noge with properties
+                                    var e = document.createElementNS('http://www.w3.org/2000/svg', type);
+                                    for (var key in attrs)
+                                        e.setAttribute(key, attrs[key]);
+                                    return e;
+                                }
+                            },
+                            params: {
+                                value: function (key) { // Get params for a graph (ensure it's created)
+                                    if (!(key in this._colors)) {
+                                        var obj = {
+                                            visible: false,
+                                            color: colors[this._color_i++ % colors.length],
+                                            titles: copy_template("titles", key),
+                                            metrics: copy_template("metrics", key)
+                                        };
+                                        this._colors[key] = obj;
+                                        obj.titles.querySelector(".dot").style.color = obj.color;
+                                        obj.titles.addEventListener('click', toggle(this, key));
+                                        obj.titles.addEventListener('mouseover', highlight(this, key));
+                                        obj.titles.addEventListener('mouseout', highlight(this));
+                                        obj.metrics.addEventListener('mouseover', highlight(this, key));
+                                        obj.metrics.addEventListener('mouseout', highlight(this));
+                                    }
+                                    return this._colors[key];
+                                }
+                            },
+                            set_metrics: {
+                                value: function (metrics) { // Add metrics point (from ajax call)
+                                    for (var key in metrics) {
+                                        metrics[key].title = key;
+                                        metrics[key]['short-title'] = shortName(key);
+                                        updateMetricsToMillisecondData(metrics[key]);
+                                    }
+                                    this._metrics = metrics;
+                                    this._graph_data_collection.add_metrics(metrics);
+                                    Object.keys(metrics).sort().forEach(function (key) {
+                                        var params = this.params(key);
+                                        copy_data_from_metrics(params.titles, metrics[key]);
+                                        copy_data_from_metrics(params.metrics, metrics[key]);
+                                    }.bind(this));
+                                    this.pie();
+                                }
+                            },
+                            metric_mapper: {
+                                value: function (v) { // Register a metrics-mapper (javascript with variable e as metrics object)
+                                    this._metric_mapper = eval("(function (e) {return " + v + ";})");
+                                    this.pie();
+                                }
+                            },
+                            graph_rate: {
+                                value: function (v) { // Set graph rate (5min, 1hour or 4hour)
+                                    this._graph_rate = v;
+                                    this.graph();
+                                }
+                            },
+                            graph_selector: {
+                                value: function (v) { // Which graph to show p50...p999
+                                    this._graph_selector = v;
+                                    this.graph();
+                                }
+                            },
+                            get_metrics: {
+                                value: function () { // Get metrics values for visible graphs using _metric_mapper
+                                    var obj = {};
+                                    Object.keys(this._colors).sort().forEach(function (key) {
+                                        var color = this._colors[key];
+                                        if (key in this._metrics && color.visible)
+                                            obj[key] = {
+                                                color: color.color,
+                                                value: this._metric_mapper(this._metrics[key])
+                                            };
+                                    }.bind(this));
+                                    return obj;
+                                }
+                            },
+                            show: {
+                                value: function (key) { // DOM callback to show a graph
+                                    this._colors[key].visible = true;
+                                    this.pie();
+                                }
+                            },
+                            hide: {
+                                value: function (key) { // DOM callback to hide a graph
+                                    this._colors[key].visible = false;
+                                    this.pie();
+                                }
+                            },
+                            highlight: {
+                                value: function (name) { // DOM callback to highlight a graph (undefind = no highlight)
+                                    this._highlight = name;
+                                    this.pie();
+                                }
+                            },
+                            pie: {
+                                value: function () { // Render a pie-chart
+                                    if (!('pie' in this))
+                                        return;
+                                    while (this._pie.hasChildNodes())
+                                        this._pie.removeChild(this._pie.firstChild);
+                                    var metrics = this.get_metrics();
+                                    var keys = Object.keys(metrics);
+                                    var total = 0;
+                                    keys.forEach(function (key) {
+                                        total += metrics[key].value;
+                                    });
+                                    var pie = new Pie(total);
+                                    var node = this._pie;
+                                    if (keys.length === 0) {
+                                        node.appendChild(this.svg_element('circle', {fill: "#888", x: 0, y: 0, r: 1}));
+                                    } else if (keys.length === 1) {
+                                        node.appendChild(this.svg_element('circle', {fill: metrics[keys[0]].color, x: 0, y: 0, r: 1}));
+                                    } else {
+                                        var opacity = this.opacityFunction();
+                                        keys.forEach(function (key) {
+                                            node.appendChild(this.svg_element('path', {
+                                                fill: metrics[key].color,
+                                                "fill-opacity": opacity(key),
+                                                d: pie.arc(metrics[key].value)
+                                            }));
+                                        }.bind(this));
+                                    }
+                                    this.graph();
+                                }
+                            },
+                            graph: {
+                                value: function () { // Render a graph
+                                    var hist = this._graph_data[this._graph_rate];
+                                    while (this._graph.hasChildNodes())
+                                        this._graph.removeChild(this._graph.firstChild);
+                                    var data = hist.data;
+                                    var metrics = this.get_metrics();
+                                    var keys = Object.keys(metrics);
+                                    var max = 10;
+                                    keys.forEach(function (k) {
+                                        if (k in data) {
+                                            data[k].forEach(function (d) {
+                                                if (d !== null) {
+                                                    max = Math.max(max, d[this._graph_selector].max);
+                                                    max = Math.max(max, d[this._graph_selector].mean);
+                                                }
+                                            }.bind(this));
+                                        }
+                                    }.bind(this));
+                                    var e = this.svg_element("text", {x: 0, y: -10, stroke: "black"});
+                                    e.appendChild(document.createTextNode("" + max));
+                                    this._graph.appendChild(e);
+                                    var lines_every = Math.pow(10, Math.round(Math.log10(max / 5)));
+                                    if ((max / 5) / lines_every >= 1.125)
+                                        lines_every *= 2;
 
-                var updateMetrics = function () {
-                    get("/metrics/application", function (json) {
-                        for (var key in json)
-                            registerMetric(key, json[key]);
-                    });
-                };
+                                    for (var i = 1; i < 10; i++) {
+                                        var r = 200 - 200 * lines_every * i / max;
+                                        if (r < 0)
+                                            break;
+                                        this._graph.appendChild(this.svg_element("polyline", {
+                                            points: "0," + r + " 500," + r,
+                                            stroke: "lightgray",
+                                            "stroke-width": "1",
+                                            fill: 'none'
+                                        }));
+                                    }
+                                    this._graph.appendChild(this.svg_element("polyline", {
+                                        points: "-10,0 0,0 0,200 500,200 500,210",
+                                        stroke: "black",
+                                        "stroke-width": "1",
+                                        fill: 'none'
+                                    }));
 
-                window.addEventListener("load", function () {
-                    updateMetrics();
-                    window.setInterval(updateMetrics, 5000);
-                });
-                return undefined;
+                                    var opacity = this.opacityFunction();
+                                    var step = 500 / (hist.length - 1);
+                                    max /= 200;
+                                    keys.forEach(function (k) {
+                                        if (k in data) {
+                                            var line = [];
+                                            var area_top = [];
+                                            var area_bottom = [];
+                                            var x = 0;
+                                            data[k].forEach(function (d) {
+                                                if (d !== null) {
+                                                    line.push(x + "," + (200 - d[this._graph_selector].mean / max));
+                                                    area_top.push(x + "," + (200 - Math.max(d[this._graph_selector].max, d[this._graph_selector].mean) / max));
+                                                    area_bottom.push(x + "," + (200 - Math.min(d[this._graph_selector].min, d[this._graph_selector].mean) / max));
+                                                }
+                                                x += step;
+                                            }.bind(this));
+                                            area_bottom.reverse();
+                                            var area = [].concat(area_top).concat(area_bottom);
+                                            var o = 1;
+                                            if (keys.length > 1)
+                                                o = opacity(k);
+                                            this._graph.insertBefore(this.svg_element("polygon", {
+                                                points: area.join(" "),
+                                                fill: metrics[k].color,
+                                                "fill-opacity": o * .25,
+                                                stroke: 'none'
+                                            }), this._graph.firstChild);
+                                            this._graph.appendChild(this.svg_element("polyline", {
+                                                points: line.join(" "),
+                                                stroke: metrics[k].color,
+                                                "stroke-opacity": o,
+                                                "stroke-width": "1",
+                                                "stroke-linejoin": "round",
+                                                fill: 'none'
+                                            }));
+                                        }
+                                    }.bind(this));
+                                }
+                            },
+                            opacityFunction: {
+                                value: function () { // Create a function that given a graph name return the opacity
+                                    if (this._highlight && Object.keys(this._colors)
+                                            .filter(function (key) {
+                                                return this._colors[key].visible;
+                                            }.bind(this)).length > 1) {
+                                        return (function (match) {
+                                            return function (name) {
+                                                return name === match ? 1 : .125;
+                                            };
+                                        })(this._highlight);
+                                    }
+                                    return function (name) {
+                                        return 1;
+                                    };
+                                }
+                            }
+                        });
+                return Metrics;
             })();
+            var m = new Metrics();
+            window.addEventListener('load', m.on_load);
         </script>
     </head>
     <body>
         <h1>Call metrics for @APPNAME@</h1>
-        <div id="collapsed"></div>
-        <div id="pie"></div>
-        <div id="expanded"></div>
-        <div style="display: none;">
-            <div id="template_collapsed">
-                <span data-from="title"></span>
-                <span class="hover" data-from="full-title"></span>
+        <div class="root">
+            <div id="titles"></div>
+            <div class="c" >
+                <select onchange="m.metric_mapper(this.options[this.selectedIndex].value);">
+                    <option value="e['count']">count</option>
+                    <option value="e['p50']*e['count']" selected>50% x count</option>
+                    <option value="e['p50']">50%</option>
+                    <option value="e['p75']*e['count']">75% x count</option>
+                    <option value="e['p75']">75%</option>
+                    <option value="e['p95']*e['count']">95% x count</option>
+                    <option value="e['p95']">95%</option>
+                    <option value="e['p98']*e['count']">98% x count</option>
+                    <option value="e['p98']">98%</option>
+                    <option value="e['p99']*e['count']">99% x count</option>
+                    <option value="e['p99']">99%</option>
+                    <option value="e['p999']*e['count']">99.9% x count</option>
+                    <option value="e['p999']">99.9%</option>
+                    <option value="e['oneMinRate']">/1m</option>
+                    <option value="e['fiveMinRate']">/5m</option>
+                    <option value="e['fifteenMinRate']">/15m</option>
+                </select>
+                <br>
+                <svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" id="pie" preserveAspectRatio="xMidYMid slice" viewBox="-1 -1 2 2"></svg>
             </div>
-            <div id="template_expanded" class="hidden">
-                <span data-from="title"></span>
+            <div class="c" >
+                <select onchange="m.graph_selector(this.options[this.selectedIndex].value);">
+                    <option value="p50" selected>50%</option>
+                    <option value="p75">75%</option>
+                    <option value="p95">95%</option>
+                    <option value="p98">98%</option>
+                    <option value="p99">99%</option>
+                    <option value="p999">99.9%</option>
+                </select>
+                <select onchange="m.graph_rate(this.options[this.selectedIndex].value);">
+                    <option value="5min" selected>5 min</option>
+                    <option value="1hour">60 min</option>
+                    <option value="4hour">4 hour</option>
+                </select>
+                <br>
+                <svg width="825" height="375" id="graph" preserveAspectRatio="none" viewBox="-25 -25 550 250"></svg>
+            </div>
+        </div>
+
+        <div id="metrics" class="root"></div>
+
+        <div style="display: none">
+            <div id="titles_template" style="position: relative;">
+                <span class="dot">&#x2b24;</span>
+                <span data-from="short-title"></span>
+                <span data-from="title" class="hover"></span>
+            </div>
+            <div id="metrics_template" class="hidden" style="position: relative;">
+                <span data-from="short-title"></span>
+                <span data-from="title" class="hover"></span>
                 <table>
                     <tbody>
                         <tr><td>Count</td><td data-from="count"></td></tr>
@@ -411,4 +684,3 @@
         </div>
     </body>
 </html>
-

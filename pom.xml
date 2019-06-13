@@ -92,7 +92,9 @@ use HTML::TreeBuilder;
 
 for my $path (@ARGV) {
     make_path catdir($ENV{TARGET_DIR}, $path);
-    my $t = new HTML::TreeBuilder->parse_file(catfile($ENV{SOURCE_DIR}, $path));
+    my $p = new HTML::TreeBuilder;
+    $p->ignore_unknown(0);
+    my $t = $p->parse_file(catfile($ENV{SOURCE_DIR}, $path));
     my @js = $t->look_down("_tag", "script");
     for my $i (1..@js) {
         my $file = new IO::File(catfile($ENV{TARGET_DIR}, $path, "$i.js"), "w");
@@ -139,7 +141,9 @@ use HTML::TreeBuilder;
 
 make_path $ENV{TARGET_DIR};
 for my $path (@ARGV) {
-    my $t = new HTML::TreeBuilder->parse_file(catfile($ENV{SOURCE_DIR}, $path));
+    my $p = new HTML::TreeBuilder;
+    $p->ignore_unknown(0);
+    my $t = $p->parse_file(catfile($ENV{SOURCE_DIR}, $path));
     my @js = $t->look_down("_tag", "script");
     for my $i (1..@js) {
         my $file = new IO::File(catfile($ENV{INCLUDE_DIR}, $path, "$i.js"), "r");
@@ -155,7 +159,7 @@ for my $path (@ARGV) {
         $file->close();
     }
     my $file = new IO::File(catfile($ENV{TARGET_DIR}, $path), "w");
-    $file->print($t->as_HTML());
+    $file->print($t->as_HTML('<>&'));
     $file->close();
 }
 ]]>
