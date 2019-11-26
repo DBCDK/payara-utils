@@ -1,13 +1,33 @@
 # payara-utils - ©DBC
 
-A jar that can be added to payara5(-micro).
+A couple of jars for payara5
 
-It does require slf4j and logback at runtime, but not at deploy time, so you need
-to add those too.
+## The modules
+
+- The `payara-utils-runtime` jar - is for adding to the payara server with
+  `--addjar`, however you can depend upon it, if you don't want it to be
+  included in your base payara image.
+
+- The `payara-utils-requires-admin` is a jar that you can add to your `war`
+  to access tnhe ip-based access control
+
+They do require `slf4j` and `logback` at runtime, but not at deploy time, so
+you need to add those too.
 
 ## Usage
 
 ### Authorization
+
+Accessed through:
+
+    <dependencies>
+        <dependency>
+            <groupId>dk.dbc</groupId>
+            <artifact>payara-utils-requires-admin</artifact>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+    </dependencies>
+
 
 It registers a request-filter that looks for `@RequiresAdmin` annotations. If
 such is found, it looks at 2 environment variables: `ADMIN_IP` and
@@ -29,10 +49,14 @@ request is allowed.
 
 ### Metrics
 
+Part of `payara-utils-runtime`
+
 It registers a webpage at `/metrics.html` that looks at the microservice-endpoint
 `/metrics/` and presents that data.
 
 ### LogLevel
+
+Part of `payara-utils-runtime`
 
 If exposes a webpage at `/loglevel.html` and an endpoint at `/loglevel/` that
 is `@RequiresAdmin` protected.
