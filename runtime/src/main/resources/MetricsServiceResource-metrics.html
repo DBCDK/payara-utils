@@ -47,10 +47,10 @@
             div > .hover {
                 display: none;
                 position: absolute;
-                top: -.8em;
-                left: 5em;
+                top: -3px;
+                left: 2em;
                 background-color: white;
-                margin: 2px;
+                margin: 0px;
                 padding: 2px;
                 border: 1px solid black;
                 z-index: 1;
@@ -403,6 +403,14 @@
                             set_metrics: {
                                 value: function (metrics) { // Add metrics point (from ajax call)
                                     for (var key in metrics) {
+                                        if (typeof (metrics[key]) !== 'object') {
+                                            metrics[key] = {
+                                                "count": metrics[key]
+                                            };
+                                            milliFields.forEach(function (n) {
+                                                metrics[key][n] = 0;
+                                            });
+                                        }
                                         metrics[key].title = key;
                                         metrics[key]['short-title'] = shortName(key);
                                         updateMetricsToMillisecondData(metrics[key]);
