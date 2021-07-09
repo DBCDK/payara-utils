@@ -22,7 +22,7 @@ import dk.dbc.payarautils.accesscontrol.RequiresAdminRules;
 import org.junit.Test;
 
 import static org.hamcrest.CoreMatchers.*;
-import static org.junit.Assert.*;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 /**
  *
