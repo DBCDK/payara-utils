@@ -21,13 +21,13 @@ package dk.dbc.payarautils.accesscontrol;
 import java.io.IOException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.annotation.Priority;
-import javax.servlet.http.HttpServletRequest;
-import javax.ws.rs.NotAuthorizedException;
-import javax.ws.rs.container.ContainerRequestContext;
-import javax.ws.rs.container.ContainerRequestFilter;
+import jakarta.annotation.Priority;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.ws.rs.NotAuthorizedException;
+import jakarta.ws.rs.container.ContainerRequestContext;
+import jakarta.ws.rs.container.ContainerRequestFilter;
 
-import static javax.ws.rs.Priorities.AUTHORIZATION;
+import static jakarta.ws.rs.Priorities.AUTHORIZATION;
 
 /**
  * A container request filter that validated the request against
