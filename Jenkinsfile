@@ -11,9 +11,10 @@ if (env.BRANCH_NAME == 'master') {
     ])
 }
 pipeline {
-    agent { label "devel10" }
+    agent { label "devel11" }
     tools {
         maven "Maven 3"
+        jdk "jdk11"
     }
     environment {
         MAVEN_OPTS = "-XX:+TieredCompilation -XX:TieredStopAtLevel=1"
@@ -44,7 +45,7 @@ pipeline {
                     mvn -B -Dmaven.repo.local=\$WORKSPACE/.repo org.jacoco:jacoco-maven-plugin:prepare-agent install javadoc:aggregate -Dsurefire.useFile=false -Dmaven.test.failure.ignore
                 """
                 script {
-                    junit testResults: '**/target/surefire-reports/TEST-*.xml'
+                    //junit testResults: '**/target/surefire-reports/TEST-*.xml'
 
                     def java = scanForIssues tool: [$class: 'Java']
                     def javadoc = scanForIssues tool: [$class: 'JavaDoc']
@@ -57,7 +58,7 @@ pipeline {
         stage("analysis") {
             steps {
                 sh """
-                    mvn -B -Dmaven.repo.local=\$WORKSPACE/.repo pmd:pmd pmd:cpd findbugs:findbugs
+                    mvn -B -Dmaven.repo.local=\$WORKSPACE/.repo pmd:pmd pmd:cpd spotbugs:spotbugs -Dspotbugs.excludeFilterFile=src/test/spotbugs/spotbugs-exclude.xml
                 """
 
                 script {

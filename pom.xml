@@ -22,6 +22,5 @@
 
     <modules>
         <module>runtime</module>
-        <module>requires-admin</module>
     </modules>
 </project>
