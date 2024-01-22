@@ -34,6 +34,12 @@ import static java.nio.charset.StandardCharsets.UTF_8;
  */
 public class PayaraUtilsHtmlResource {
 
+    /**
+     * Read a resource, and replace @APPNAME@ with current app-name
+     *
+     * @param resource to load
+     * @return HTML page contetn
+     */
     public static byte[] loadHtml(String resource) {
         try (InputStream is = PayaraUtilsHtmlResource.class.getClassLoader()
                 .getResourceAsStream(resource)) {
